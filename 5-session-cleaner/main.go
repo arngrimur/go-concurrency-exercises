@@ -20,12 +20,17 @@ package main
 import (
 	"errors"
 	"log"
+	"sync"
+	"time"
 )
+
+const lastUpdated = "updated"
 
 // SessionManager keeps track of all sessions from creation, updating
 // to destroying.
 type SessionManager struct {
 	sessions map[string]Session
+	mu       sync.Mutex
 }
 
 // Session stores the session's data
@@ -37,7 +42,28 @@ type Session struct {
 func NewSessionManager() *SessionManager {
 	m := &SessionManager{
 		sessions: make(map[string]Session),
+		mu:       sync.Mutex{},
 	}
+
+	ticker := time.Tick(time.Second)
+
+	go func() {
+		for {
+			<-ticker
+			func() {
+				m.mu.Lock()
+				defer m.mu.Unlock()
+				for k, v := range m.sessions {
+					if v.Data[lastUpdated] != nil {
+						if time.Since(v.Data[lastUpdated].(time.Time)) > 5*time.Second {
+							delete(m.sessions, k)
+						}
+					}
+				}
+			}()
+		}
+
+	}()
 
 	return m
 }
@@ -49,9 +75,12 @@ func (m *SessionManager) CreateSession() (string, error) {
 		return "", err
 	}
 
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.sessions[sessionID] = Session{
 		Data: make(map[string]interface{}),
 	}
+	m.sessions[sessionID].Data[lastUpdated] = time.Now()
 
 	return sessionID, nil
 }
@@ -63,7 +92,10 @@ var ErrSessionNotFound = errors.New("SessionID does not exists")
 // GetSessionData returns data related to session if sessionID is
 // found, errors otherwise
 func (m *SessionManager) GetSessionData(sessionID string) (map[string]interface{}, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	session, ok := m.sessions[sessionID]
+
 	if !ok {
 		return nil, ErrSessionNotFound
 	}
@@ -71,17 +103,19 @@ func (m *SessionManager) GetSessionData(sessionID string) (map[string]interface{
 }
 
 // UpdateSessionData overwrites the old session data with the new one
+// Hint: you should renew expiry of the session here
 func (m *SessionManager) UpdateSessionData(sessionID string, data map[string]interface{}) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	_, ok := m.sessions[sessionID]
 	if !ok {
 		return ErrSessionNotFound
 	}
 
-	// Hint: you should renew expiry of the session here
 	m.sessions[sessionID] = Session{
 		Data: data,
 	}
-
+	m.sessions[sessionID].Data[lastUpdated] = time.Now()
 	return nil
 }
 
