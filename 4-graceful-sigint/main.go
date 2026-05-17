@@ -13,10 +13,25 @@
 
 package main
 
+import (
+	"os"
+	"os/signal"
+)
+
 func main() {
 	// Create a process
 	proc := MockProcess{}
 
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	go func() {
+		print("Press Ctrl+C to stop the process\n")
+		<-c
+		go proc.Stop()
+		<-c
+		os.Exit(1)
+	}()
 	// Run the process (blocking)
 	proc.Run()
+
 }
