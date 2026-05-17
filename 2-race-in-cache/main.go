@@ -10,6 +10,7 @@ package main
 
 import (
 	"container/list"
+	"sync"
 	"testing"
 )
 
@@ -30,6 +31,7 @@ type page struct {
 // KeyStoreCache is a LRU cache for string key-value pairs
 type KeyStoreCache struct {
 	cache map[string]*list.Element
+	mutex sync.Mutex
 	pages list.List
 	load  func(string) string
 }
@@ -38,12 +40,15 @@ type KeyStoreCache struct {
 func New(load KeyStoreCacheLoader) *KeyStoreCache {
 	return &KeyStoreCache{
 		load:  load.Load,
+		mutex: sync.Mutex{},
 		cache: make(map[string]*list.Element),
 	}
 }
 
 // Get gets the key from cache, loads it from the source if needed
 func (k *KeyStoreCache) Get(key string) string {
+	k.mutex.Lock()
+	defer k.mutex.Unlock()
 	if e, ok := k.cache[key]; ok {
 		k.pages.MoveToFront(e)
 		return e.Value.(page).Value
