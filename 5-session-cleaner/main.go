@@ -24,8 +24,6 @@ import (
 	"time"
 )
 
-const lastUpdated = "updated"
-
 // SessionManager keeps track of all sessions from creation, updating
 // to destroying.
 type SessionManager struct {
@@ -35,7 +33,8 @@ type SessionManager struct {
 
 // Session stores the session's data
 type Session struct {
-	Data map[string]interface{}
+	Data        map[string]interface{}
+	lastUpdated time.Time
 }
 
 // NewSessionManager creates a new sessionManager
@@ -54,10 +53,8 @@ func NewSessionManager() *SessionManager {
 				m.mu.Lock()
 				defer m.mu.Unlock()
 				for k, v := range m.sessions {
-					if v.Data[lastUpdated] != nil {
-						if time.Since(v.Data[lastUpdated].(time.Time)) > 5*time.Second {
-							delete(m.sessions, k)
-						}
+					if time.Since(v.lastUpdated) > 5*time.Second {
+						delete(m.sessions, k)
 					}
 				}
 			}()
@@ -78,9 +75,9 @@ func (m *SessionManager) CreateSession() (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.sessions[sessionID] = Session{
-		Data: make(map[string]interface{}),
+		Data:        make(map[string]interface{}),
+		lastUpdated: time.Now(),
 	}
-	m.sessions[sessionID].Data[lastUpdated] = time.Now()
 
 	return sessionID, nil
 }
@@ -113,9 +110,9 @@ func (m *SessionManager) UpdateSessionData(sessionID string, data map[string]int
 	}
 
 	m.sessions[sessionID] = Session{
-		Data: data,
+		Data:        data,
+		lastUpdated: time.Now(),
 	}
-	m.sessions[sessionID].Data[lastUpdated] = time.Now()
 	return nil
 }
 
