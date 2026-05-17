@@ -12,6 +12,7 @@ package main
 import (
 	"fmt"
 	"sync"
+	"time"
 )
 
 // Crawl uses `fetcher` from the `mockfetcher.go` file to imitate a
@@ -33,16 +34,22 @@ func Crawl(url string, depth int, wg *sync.WaitGroup) {
 
 	wg.Add(len(urls))
 	for _, u := range urls {
-		// Do not remove the `go` keyword, as Crawl() must be
-		// called concurrently
-		go Crawl(u, depth-1, wg)
+		select {
+		case <-ticker.C:
+			// Do not remove the `go` keyword, as Crawl() must be
+			// called concurrently
+			go Crawl(u, depth-1, wg)
+		}
 	}
 }
 
+var ticker *time.Ticker
+
 func main() {
 	var wg sync.WaitGroup
+	ticker = time.NewTicker(1 * time.Second)
 
 	wg.Add(1)
-	Crawl("http://golang.org/", 4, &wg)
+	go Crawl("http://golang.org/", 4, &wg)
 	wg.Wait()
 }
